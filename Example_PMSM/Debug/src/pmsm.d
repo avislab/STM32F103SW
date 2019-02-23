@@ -32,7 +32,7 @@ src/pmsm.o: ../src/pmsm.c \
  /home/andre/workspace/Example_PMSM/StdPeriph_Driver/inc/stm32f10x_exti.h \
  /home/andre/workspace/Example_PMSM/StdPeriph_Driver/inc/stm32f10x_flash.h \
  /home/andre/workspace/Example_PMSM/StdPeriph_Driver/inc/misc.h \
- ../src/pmsm.h ../src/adc_dma.h ../src/systickdelay.h ../src/usart_dma.h
+ ../src/pmsm.h ../src/adc_dma.h ../src/systickdelay.h
 
 /home/andre/workspace/Example_PMSM/StdPeriph_Driver/inc/stm32f10x_rcc.h:
 
@@ -105,5 +105,3 @@ src/pmsm.o: ../src/pmsm.c \
 ../src/adc_dma.h:
 
 ../src/systickdelay.h:
-
-../src/usart_dma.h:

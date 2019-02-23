@@ -475,10 +475,8 @@ void EXTI9_5_IRQHandler(void) {
 
    		// It requires at least two measurement to correct calculate the rotor speed
    		if (PMSM_MotorSpeedIsOK()) {
-   			// Enable timer TIM4 to generate sine
    			TIM_SetCounter(TIM4, 0);
    			TIM4->ARR = PMSM_Speed;
-   			//TIM_Cmd(TIM4, ENABLE);
    		}
 
    		// Phase correction

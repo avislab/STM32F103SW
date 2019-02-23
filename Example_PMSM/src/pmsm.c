@@ -10,7 +10,6 @@
 #include "pmsm.h"
 #include "adc_dma.h"
 #include "systickdelay.h"
-#include "usart_dma.h"
 
 // Variables
 volatile uint8_t PMSM_MotorRunFlag = 0;
@@ -223,8 +222,19 @@ static const uint8_t PMSM_SINTABLE [PMSM_SINTABLESIZE][3] =
 		{0,       8,      225}
 };
 
+uint8_t NEXT_STATE_TABLE[2][6];
+
 // Phase correction table
-volatile uint8_t PMSM_STATE_TABLE_INDEX[2][8] = { {0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0} };
+typedef struct
+  {
+	uint8_t PMSM_STATE_TABLE_INDEX[2][8];
+	uint8_t PMSM_NEXT_STATE_TABLE[2][8];
+  } tpSettings;
+
+tpSettings settings;
+#define SETTINGS_WORDS 8
+
+volatile uint8_t PMSM_NEXT_STATE = 0;
 
 #define UH	0
 #define UL	1
@@ -233,9 +243,7 @@ volatile uint8_t PMSM_STATE_TABLE_INDEX[2][8] = { {0, 0, 0, 0, 0, 0, 0, 0}, {0, 
 #define WH	4
 #define WL	5
 
-#define MY_FLASH_PAGE_ADDR 0x800FC00
-
-#define SETTINGS_WORDS 4
+#define SETTINGS_FLASH_PAGE_ADDR	0x800FC00
 
 void FLASH_Init(void) {
     /* Next commands may be used in SysClock initialization function
@@ -248,30 +256,31 @@ void FLASH_Init(void) {
 
 void FLASH_ReadSettings(void) {
     //Read settings
-    uint32_t *source_addr = (uint32_t *)MY_FLASH_PAGE_ADDR;
-    uint32_t *dest_addr = (void *)&PMSM_STATE_TABLE_INDEX;
+    uint32_t *source_addr = (uint32_t *)SETTINGS_FLASH_PAGE_ADDR;
+    uint32_t *dest_addr = (void *)&settings;
     for (uint16_t i=0; i<SETTINGS_WORDS; i++) {
-        *dest_addr = *(__IO uint32_t*)source_addr;
-        source_addr++;
-        dest_addr++;
+            *dest_addr = *(__IO uint32_t*)source_addr;
+            source_addr++;
+            dest_addr++;
     }
 }
 
 void FLASH_WriteSettings(void) {
     FLASH_Unlock();
-    FLASH_ErasePage(MY_FLASH_PAGE_ADDR);
+    FLASH_ErasePage(SETTINGS_FLASH_PAGE_ADDR);
 
     // Write settings
-    uint32_t *source_addr = (void *)&PMSM_STATE_TABLE_INDEX;
-    uint32_t *dest_addr = (uint32_t *) MY_FLASH_PAGE_ADDR;
+    uint32_t *source_addr = (void *)&settings;
+    uint32_t *dest_addr = (uint32_t *)SETTINGS_FLASH_PAGE_ADDR;
     for (uint16_t i=0; i<SETTINGS_WORDS; i++) {
-        FLASH_ProgramWord((uint32_t)dest_addr, *source_addr);
-        source_addr++;
-        dest_addr++;
+            FLASH_ProgramWord((uint32_t)dest_addr, *source_addr);
+            source_addr++;
+            dest_addr++;
     }
 
     FLASH_Lock();
 }
+
 
 // Initialize of all needed peripheral
 void PMSM_Init(void) {
@@ -357,7 +366,6 @@ void PMSM_ButtonsInit(void) {
 
 uint8_t PMSM_GetButtonRevers(void) {
 	return GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0);
-
 }
 
 uint8_t PMSM_GetButtonKey1(void) {
@@ -401,45 +409,98 @@ void PMSM_HallSensorsInit(void) {
 
 // Every time when hall sensors change state executed this IRQ handler
 void EXTI9_5_IRQHandler(void) {
+	uint8_t i;
+	uint8_t newPMSM_SensorPosition;
+	uint16_t TIM_Counter;
+
 	if ((EXTI_GetITStatus(EXTI_Line7) | EXTI_GetITStatus(EXTI_Line8) | EXTI_GetITStatus(EXTI_Line9)) != RESET) {
     	// Clear interrupt flag
         EXTI_ClearITPendingBit(EXTI_Line7);
         EXTI_ClearITPendingBit(EXTI_Line8);
         EXTI_ClearITPendingBit(EXTI_Line9);
 
-		if (PMSM_SensorCheckMode == 1) {
+        newPMSM_SensorPosition = PMSM_HallSensorsGetPosition();
+        TIM_Counter = TIM_GetCounter(TIM3);
+    	////////////////////////////////////////////////////
+    	// FILTERS
+    	////////////////////////////////////////////////////
+    	// So small time - noise in fronts
+		//if ( (TIM_Counter > 0) && (TIM_Counter < 10) ) {
+		//	return;
+		//}
+
+		// Speed raise so fast (unreal fast) - sensor noise
+		//if (TIM_Counter < PMSM_Speed/2) {
+		//	return;
+		//}
+
+		// Interrupt is happened but sensor state hasn't changed.
+		// "Double interrupt" bug
+		if (PMSM_SensorPosition == newPMSM_SensorPosition) {
+			return;
+		}
+		////////////////////////////////////////////////////
+
+		if (PMSM_SensorCheckMode == 1) { // Check mode
 			if (PMSM_SensorPositionCount < 36) {
-				PMSM_STATE_TABLE_INDEX[PMSM_MotorSpin][PMSM_HallSensorsGetPosition()] = PMSM_GetNormPos(PMSM_SinTableIndex + PMSM_SINTABLESIZE/4);
+				settings.PMSM_STATE_TABLE_INDEX[PMSM_MotorSpin][newPMSM_SensorPosition] = PMSM_GetNormPos(PMSM_SinTableIndex + PMSM_SINTABLESIZE/4);
+				//settings.PMSM_NEXT_STATE_TABLE[PMSM_MotorSpin][PMSM_NEXT_STATE] = PMSM_HallSensorsGetPosition();
+				NEXT_STATE_TABLE[PMSM_MotorSpin][PMSM_NEXT_STATE] = newPMSM_SensorPosition;
+				PMSM_NEXT_STATE ++;
+				if (PMSM_NEXT_STATE > 5) {
+					PMSM_NEXT_STATE = 0;
+				}
+
 				PMSM_SensorPositionCount += 1;
 			}
 			else {
+
+				// Prepare settings.PMSM_NEXT_STATE_TABLE
+				for (i=0; i<4; i++) {
+					settings.PMSM_NEXT_STATE_TABLE[PMSM_MotorSpin][NEXT_STATE_TABLE[PMSM_MotorSpin][i]] = NEXT_STATE_TABLE[PMSM_MotorSpin][i+1];
+				}
+				settings.PMSM_NEXT_STATE_TABLE[PMSM_MotorSpin][NEXT_STATE_TABLE[PMSM_MotorSpin][5]] = NEXT_STATE_TABLE[PMSM_MotorSpin][0];
+
 				PMSM_SaveSensorPosition();
 				PMSM_SetSensorCheckMode(0);
 			}
 
     		return;
 		}
+		else { // Run mode
+			// Phase correction
+			PMSM_SinTableIndex = PMSM_GetState(newPMSM_SensorPosition);
+			PMSM_SinTableLimit = 0;
+			PMSM_PWM_Update();
 
-    	// Get rotation time (in inverse ratio speed) from timer TIM3
-    	PMSM_Speed_prev = PMSM_Speed;
-    	PMSM_Speed = TIM_GetCounter(TIM3);
+			// If new sensor position is same that waited
+			if (settings.PMSM_NEXT_STATE_TABLE[PMSM_MotorSpin][PMSM_SensorPosition] == newPMSM_SensorPosition) {
+				// Get rotation time (in inverse ratio speed) from timer TIM3
+				PMSM_Speed_prev = PMSM_Speed;
+				PMSM_Speed = TIM_Counter;
+			}
+			else {
+				PMSM_Speed_prev = 0;
+				PMSM_Speed = 0;
+			}
+			PMSM_SensorPosition = newPMSM_SensorPosition;
 
-    	TIM_Cmd(TIM3, ENABLE);
-		TIM_SetCounter(TIM3, 0);
+			TIM_Cmd(TIM3, ENABLE);
+			TIM_SetCounter(TIM3, 0);
 
-		// It requires at least two measurement to correct calculate the rotor speed
-		if (PMSM_MotorSpeedIsOK()) {
-			// Enable timer TIM4 to generate sine
-			TIM_SetCounter(TIM4, 0);
-			// Set timer period
-			TIM4->ARR = PMSM_Speed;
-			//TIM_Cmd(TIM4, ENABLE);
+			// It requires at least two measurement to correct calculate the rotor speed
+			if (PMSM_MotorSpeedIsOK()) {
+				// Enable timer TIM4 to generate sine
+				TIM_SetCounter(TIM4, 0);
+				// Set timer period
+				TIM4->ARR = PMSM_Speed;
+			}
+			else {
+				TIM_SetCounter(TIM4, 0);
+				TIM4->ARR = PMSM_START_SIN_TIMER;
+			}
 		}
 
-		// Phase correction
-		PMSM_SinTableIndex = PMSM_GetState(PMSM_HallSensorsGetPosition());
-		PMSM_SinTableLimit = 0;
-		PMSM_PWM_Update();
     }
 }
 
@@ -591,6 +652,7 @@ void PMSM_SpeedTimerInit(void) {
 	NVIC_Init(&NVIC_InitStructure);
 }
 
+
 void TIM3_IRQHandler(void) {
 	if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET)
 	{
@@ -599,8 +661,11 @@ void TIM3_IRQHandler(void) {
 		//if (PMSM_MotorSpeedIsOK()) {
 			//PMSM_MotorStop();
 		//}
+		PMSM_Speed = 0;
+		PMSM_Speed_prev = 0;
 	}
 }
+
 
 // Get data from hall sensors
 uint8_t PMSM_HallSensorsGetPosition(void) {
@@ -694,7 +759,7 @@ uint8_t	PMSM_GetNormPos(int16_t position) {
 // Get index in sine table based on the sensor data, the timing and the direction of rotor rotation
 uint8_t	PMSM_GetState(uint8_t SensorsPosition) {
 	int16_t index;
-	index = PMSM_STATE_TABLE_INDEX[PMSM_MotorSpin][SensorsPosition] + (int16_t)PMSM_Timing;
+	index = settings.PMSM_STATE_TABLE_INDEX[PMSM_MotorSpin][SensorsPosition] + (int16_t)PMSM_Timing;
 
 	return PMSM_GetNormPos(index);
 }

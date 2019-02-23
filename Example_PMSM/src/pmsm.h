@@ -21,17 +21,15 @@
 // ==========================
 // motor start options
 // ==========================
-#define PMSM_START_PWM 10 // 10 %
+#define PMSM_START_PWM 10 // 10 % // 9 for wheel
 #define PMSM_START_PWM_VALUE PMSM_CHOPPER_PERIOD*PMSM_START_PWM/100
-
-//#define PMSM_START_DELAY 500 //500 mS
 
 #define PMSM_START_SIN_HERTZ 2
 #define PMSM_START_SIN_TIMER 36000000/PMSM_SIN_TIMER_PRESCALER/PMSM_SINTABLESIZE/PMSM_START_SIN_HERTZ
 // ==========================
 
-#define PMSM_TIMING 10 // in degrees
-#define PMSM_TIMING_DEFAULT PMSM_TIMING*360/192
+#define PMSM_TIMING 30 // in degrees //10
+#define PMSM_TIMING_DEFAULT PMSM_TIMING*192/360
 
 #define PMSM_SIN_TIMER_PRESCALER	6
 #define PMSM_PRESCALER_K	6

@@ -4007,10 +4007,10 @@ LOAD /home/andre/Ac6/SystemWorkbench/plugins/fr.ac6.mcu.externaltools.arm-none.l
                 0x0000000020000000                . = ALIGN (0x4)
                 0x0000000020000000                _sdata = .
  *(.data)
- .data          0x0000000020000000        0x3 src/pmsm.o
+ .data          0x0000000020000000        0x2 src/pmsm.o
                 0x0000000020000000                PMSM_StararPositionFlag
                 0x0000000020000001                PMSM_SensorPosition
- *fill*         0x0000000020000003        0x1 
+ *fill*         0x0000000020000002        0x2 
  .data          0x0000000020000004       0x14 src/system_stm32f10x.o
                 0x0000000020000004                SystemCoreClock
                 0x0000000020000008                AHBPrescTable
@@ -4317,7 +4317,7 @@ OUTPUT(Example_PMSM_OneSensor.elf elf32-littlearm)
  .debug_line    0x000000000000685f      0x6b8 src/usart_dma.o
  .debug_line    0x0000000000006f17       0x7c startup/startup_stm32.o
 
-.debug_str      0x0000000000000000    0x55100
+.debug_str      0x0000000000000000    0x550ff
  .debug_str     0x0000000000000000    0x4cb43 StdPeriph_Driver/src/misc.o
                                       0x4ccbb (size before relaxing)
  .debug_str     0x000000000004cb43      0xb77 StdPeriph_Driver/src/stm32f10x_adc.o
@@ -4336,15 +4336,15 @@ OUTPUT(Example_PMSM_OneSensor.elf elf32-littlearm)
                                       0x4d737 (size before relaxing)
  .debug_str     0x000000000005045d       0x75 src/adc_dma.o
                                       0x4cda7 (size before relaxing)
- .debug_str     0x00000000000504d2     0x428c src/main.o
-                                      0x50de1 (size before relaxing)
- .debug_str     0x000000000005475e      0x775 src/pmsm.o
-                                      0x51aa1 (size before relaxing)
- .debug_str     0x0000000000054ed3       0x76 src/system_stm32f10x.o
+ .debug_str     0x00000000000504d2     0x428b src/main.o
+                                      0x50de0 (size before relaxing)
+ .debug_str     0x000000000005475d      0x775 src/pmsm.o
+                                      0x51aa0 (size before relaxing)
+ .debug_str     0x0000000000054ed2       0x76 src/system_stm32f10x.o
                                       0x4cbc7 (size before relaxing)
- .debug_str     0x0000000000054f49       0x9d src/systickdelay.o
+ .debug_str     0x0000000000054f48       0x9d src/systickdelay.o
                                       0x4ce76 (size before relaxing)
- .debug_str     0x0000000000054fe6      0x11a src/usart_dma.o
+ .debug_str     0x0000000000054fe5      0x11a src/usart_dma.o
                                       0x50092 (size before relaxing)
 
 .comment        0x0000000000000000       0x7f
